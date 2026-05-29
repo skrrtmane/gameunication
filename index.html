@@ -637,6 +637,31 @@
     .stake-matrix{padding:50px 30px 70px}
     .format{flex:0 0 100%}
   }
+
+  /* Ausgangslage — kein zentrierter Header */
+  #ausgangslage .section-head{justify-content:flex-start}
+  #ausgangslage .section-title{text-align:left}
+  #ausgangslage .section-lead{text-align:left;margin-left:0;max-width:980px}
+
+  /* Mobile Hint */
+  .mobile-hint{
+    position:fixed;bottom:80px;left:50%;transform:translateX(-50%);
+    z-index:200;
+    background:var(--bg-2);border:1px solid var(--accent-3);
+    padding:14px 20px;
+    display:flex;align-items:center;gap:16px;
+    font-family:var(--mono);font-size:11px;letter-spacing:.08em;
+    color:var(--ink);max-width:calc(100vw - 40px);
+    animation:fadeIn .4s;box-shadow:0 8px 32px rgba(0,0,0,.5);
+  }
+  .mobile-hint.hide{display:none}
+  .mobile-hint .hint-icon{color:var(--accent-3);font-size:15px;flex-shrink:0}
+  .mobile-hint .hint-close{
+    background:none;border:1px solid var(--line-strong);
+    color:var(--ink-dim);font-family:var(--mono);font-size:11px;
+    cursor:pointer;padding:4px 8px;flex-shrink:0;transition:all .2s;
+  }
+  .mobile-hint .hint-close:hover{border-color:var(--accent);color:var(--accent)}
 </style>
 </head>
 <body>
@@ -667,6 +692,12 @@
 </div>
 
 <div id="mainContent" class="hidden-content">
+
+<div class="mobile-hint hide" id="mobileHint">
+  <span class="hint-icon">💻</span>
+  <span>Beste Experience auf dem Laptop — auf Mobile geht leider einiges verloren.</span>
+  <button class="hint-close" id="mobileHintClose">✕</button>
+</div>
 
 <nav class="top">
   <div class="brand"><span class="dot"></span>GAMEUNICATION</div>
@@ -1313,49 +1344,142 @@ impactRow.innerHTML = `
 `;
 wEl.appendChild(impactRow);
 
-// DONUT chart for effort
-function renderDonut(){
-  const total = phases.reduce((s,p) => s + p.hours, 0);
-  const colors = ['var(--accent)','var(--accent-2)','var(--accent-3)','var(--accent-4)','var(--accent-5)','#a78bff'];
+// DONUT — helpers
+function polarToCart(cx, cy, r, deg) {
+  const rad = deg * Math.PI / 180;
+  return {x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad)};
+}
+function arcSegPath(cx, cy, ri, ro, a0, a1) {
+  const large = (a1 - a0) > 180 ? 1 : 0;
+  const fmt = n => n.toFixed(3);
+  const os = polarToCart(cx, cy, ro, a0), oe = polarToCart(cx, cy, ro, a1);
+  const ie = polarToCart(cx, cy, ri, a1), is2 = polarToCart(cx, cy, ri, a0);
+  return `M${fmt(os.x)},${fmt(os.y)} A${ro},${ro} 0 ${large},1 ${fmt(oe.x)},${fmt(oe.y)} L${fmt(ie.x)},${fmt(ie.y)} A${ri},${ri} 0 ${large},0 ${fmt(is2.x)},${fmt(is2.y)} Z`;
+}
+
+// split-flap Solari-Tafel-Animation
+function splitFlap(el, finalText, duration) {
+  const chars = finalText.split('');
+  const dIdx = chars.map((c, i) => /\d/.test(c) ? i : -1).filter(i => i >= 0);
+  if (!dIdx.length) return;
+  let t0 = null;
+  function frame(ts) {
+    if (!t0) t0 = ts;
+    const p = Math.min((ts - t0) / duration, 1);
+    if (p >= 1) { el.textContent = finalText; return; }
+    const out = chars.slice();
+    dIdx.forEach((pos, k) => {
+      const settle = 0.72 + (k / Math.max(dIdx.length - 1, 1)) * 0.28;
+      out[pos] = p >= settle ? chars[pos] : String(Math.floor(Math.random() * 10));
+    });
+    el.textContent = out.join('');
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+}
+
+function renderDonut() {
+  const total = phases.reduce((s, p) => s + p.hours, 0);
+  const colors = ['var(--accent)', 'var(--accent-2)', 'var(--accent-3)', 'var(--accent-4)', 'var(--accent-5)', '#a78bff'];
+  const NS = 'http://www.w3.org/2000/svg';
   const svg = document.getElementById('donut');
   const legend = document.getElementById('donutLegend');
   const cx = 50, cy = 50, r = 36, sw = 14;
-  const circumference = 2 * Math.PI * r;
-  let offset = 0;
+  const circ = 2 * Math.PI * r;
+  const ri = r - sw / 2 - 0.5, ro = r + sw / 2 + 0.5;
 
-  // background ring
-  let html = `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="rgba(255,255,255,.05)" stroke-width="${sw}"/>`;
-  // center text
-  phases.forEach((p,i) => {
-    const pct = p.hours / total;
-    const dash = pct * circumference;
-    html += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none"
-              stroke="${colors[i]}" stroke-width="${sw}"
-              stroke-dasharray="${dash} ${circumference - dash}"
-              stroke-dashoffset="${-offset}"
-              transform="rotate(-90 ${cx} ${cy})">
-              <animate attributeName="stroke-dasharray" from="0 ${circumference}" to="${dash} ${circumference - dash}" dur="1s" fill="freeze"/>
-             </circle>`;
-    offset += dash;
-  });
-  html += `<text x="${cx}" y="${cy-4}" text-anchor="middle" fill="var(--ink)" font-family="Fraunces" font-size="14" font-weight="700">${total}h</text>`;
-  html += `<text x="${cx}" y="${cy+8}" text-anchor="middle" fill="var(--ink-dim)" font-family="JetBrains Mono" font-size="4" letter-spacing="1">PERSONALAUFWAND</text>`;
-  svg.innerHTML = html;
+  svg.innerHTML = '';
+  legend.innerHTML = '';
 
-  let legHtml = '';
-  phases.forEach((p,i) => {
-    const pct = Math.round(p.hours / total * 100);
-    legHtml += `
-      <div class="leg-row">
-        <span class="leg-color" style="background:${colors[i]}"></span>
-        <span>${escapeHtml(p.name)}</span>
-        <span class="leg-hours">${p.hours} h</span>
-        <span class="leg-pct">${pct}%</span>
-      </div>`;
+  const bg = document.createElementNS(NS, 'circle');
+  bg.setAttribute('cx', cx); bg.setAttribute('cy', cy); bg.setAttribute('r', r);
+  bg.setAttribute('fill', 'none');
+  bg.setAttribute('stroke', 'rgba(255,255,255,.05)');
+  bg.setAttribute('stroke-width', sw);
+  svg.appendChild(bg);
+
+  const vCircles = [], legRows = [];
+  let dashAcc = 0, angAcc = -90;
+
+  phases.forEach((p, i) => {
+    const frac = p.hours / total;
+    const dash = frac * circ;
+    const span = frac * 360;
+
+    // visueller Ring — startet bei 0, wird per Observer animiert
+    const c = document.createElementNS(NS, 'circle');
+    c.setAttribute('cx', cx); c.setAttribute('cy', cy); c.setAttribute('r', r);
+    c.setAttribute('fill', 'none');
+    c.setAttribute('stroke', colors[i]);
+    c.setAttribute('stroke-width', sw);
+    c.setAttribute('stroke-dasharray', `0 ${circ}`);
+    c.setAttribute('stroke-dashoffset', -dashAcc);
+    c.setAttribute('transform', `rotate(-90 ${cx} ${cy})`);
+    c.style.transition = `stroke-dasharray 1.3s cubic-bezier(0.4,0,.2,1) ${i * 0.18}s, opacity 0.25s`;
+    c.dataset.dash = dash;
+    c.dataset.circ = circ;
+    svg.appendChild(c);
+    vCircles.push(c);
+
+    // unsichtbarer Hover-Pfad (exakter Sektor)
+    const hit = document.createElementNS(NS, 'path');
+    hit.setAttribute('d', arcSegPath(cx, cy, ri, ro, angAcc, angAcc + span));
+    hit.setAttribute('fill', 'transparent');
+    hit.setAttribute('stroke', 'none');
+    hit.setAttribute('data-i', i);
+    hit.style.cursor = 'pointer';
+    svg.appendChild(hit);
+
+    dashAcc += dash;
+    angAcc += span;
+
+    // Legende
+    const row = document.createElement('div');
+    row.className = 'leg-row';
+    row.dataset.i = i;
+    row.style.transition = 'opacity .25s';
+    row.innerHTML = `<span class="leg-color" style="background:${colors[i]}"></span><span>${escapeHtml(p.name)}</span><span class="leg-hours">${p.hours} h</span><span class="leg-pct">${Math.round(frac * 100)}%</span>`;
+    legend.appendChild(row);
+    legRows.push(row);
   });
-  legend.innerHTML = legHtml;
+
+  [[cx, cy - 4, 'var(--ink)',     'Fraunces',       14, '700', '',  total + 'h'],
+   [cx, cy + 8, 'var(--ink-dim)', 'JetBrains Mono',  4, '400', '1', 'PERSONALAUFWAND']
+  ].forEach(([x, y, fill, ff, fs, fw, ls, txt]) => {
+    const t = document.createElementNS(NS, 'text');
+    t.setAttribute('x', x); t.setAttribute('y', y);
+    t.setAttribute('text-anchor', 'middle');
+    t.setAttribute('fill', fill);
+    t.setAttribute('font-family', ff);
+    t.setAttribute('font-size', fs);
+    t.setAttribute('font-weight', fw);
+    if (ls) t.setAttribute('letter-spacing', ls);
+    t.textContent = txt;
+    svg.appendChild(t);
+  });
+
+  // Hover-Logik: Sektor ↔ Legendenzeile
+  function hl(idx) {
+    vCircles.forEach((c, i) => c.style.opacity = i === idx ? '1' : '0.15');
+    legRows.forEach((row, i) => row.style.opacity = i === idx ? '1' : '0.25');
+  }
+  function clr() {
+    vCircles.forEach(c => c.style.opacity = '1');
+    legRows.forEach(row => row.style.opacity = '1');
+  }
+
+  svg.querySelectorAll('path[data-i]').forEach(h => {
+    h.addEventListener('mouseenter', () => hl(+h.dataset.i));
+    h.addEventListener('mouseleave', clr);
+  });
+  legRows.forEach((row, i) => {
+    row.addEventListener('mouseenter', () => hl(i));
+    row.addEventListener('mouseleave', clr);
+  });
+
+  return vCircles;
 }
-renderDonut();
+const donutCircles = renderDonut();
 
 // SCROLL behaviors
 const scrollBtn = document.getElementById('scrollTop');
@@ -1378,8 +1502,27 @@ window.addEventListener('scroll', () => {
 });
 scrollBtn.addEventListener('click', () => window.scrollTo({top:0, behavior:'smooth'}));
 
-// recalc matrix on resize (positions are responsive already, but re-trigger transitions)
-// no-op needed since we use calc() with %
+// scroll-triggered: §07 Donut auffüllen + Solari-Zahlen
+(function () {
+  const sec = document.getElementById('kosten');
+  const bigEls = [...sec.querySelectorAll('.cost-card .big')];
+  const finals = bigEls.map(el => el.textContent.trim());
+  let done = false;
+  new IntersectionObserver(entries => {
+    if (entries[0].isIntersecting && !done) {
+      done = true;
+      donutCircles.forEach(c => {
+        const d = parseFloat(c.dataset.dash), total = parseFloat(c.dataset.circ);
+        c.setAttribute('stroke-dasharray', `${d - 1.5} ${total - d + 1.5}`);
+      });
+      bigEls.forEach((el, i) => splitFlap(el, finals[i], 2800));
+      [...sec.querySelectorAll('.cost-table td.num')].forEach(cell => {
+        const text = cell.textContent.trim();
+        if (text && text !== '0,00 €') splitFlap(cell, text, 2800);
+      });
+    }
+  }, {threshold: 0.25}).observe(sec);
+})();
 
 // ========== PASSWORD PROTECTION ==========
 const PASSWORD = 'dieterbaacke'; // ← PASSWORT HIER ÄNDERN
@@ -1390,10 +1533,26 @@ const pwdError = document.getElementById('pwdError');
 const passwordScreen = document.getElementById('passwordScreen');
 const mainContent = document.getElementById('mainContent');
 
+// Mobile hint logic
+function isMobile(){
+  return /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+    || (window.innerWidth < 900 && ('ontouchstart' in window || navigator.maxTouchPoints > 1));
+}
+function showMobileHintIfNeeded(){
+  if (isMobile() && !sessionStorage.getItem('hintDismissed')){
+    document.getElementById('mobileHint').classList.remove('hide');
+  }
+}
+document.getElementById('mobileHintClose').addEventListener('click', () => {
+  document.getElementById('mobileHint').classList.add('hide');
+  sessionStorage.setItem('hintDismissed','true');
+});
+
 // Check if already authenticated in session
 if (sessionStorage.getItem('authenticated') === 'true') {
   passwordScreen.style.display = 'none';
   mainContent.classList.add('unlocked');
+  showMobileHintIfNeeded();
 }
 
 // Handle password submission
@@ -1403,7 +1562,7 @@ function checkPassword(){
     passwordScreen.style.opacity = '0';
     passwordScreen.style.pointerEvents = 'none';
     mainContent.classList.add('unlocked');
-    setTimeout(() => { passwordScreen.style.display = 'none'; }, 300);
+    setTimeout(() => { passwordScreen.style.display = 'none'; showMobileHintIfNeeded(); }, 300);
   } else {
     pwdError.classList.add('show');
     pwdInput.style.borderColor = '#ff3b3b';
