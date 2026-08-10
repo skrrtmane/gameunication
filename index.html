@@ -668,32 +668,7 @@
 </head>
 <body>
 
-<!-- PASSWORD PROTECTION SCREEN -->
-<div id="passwordScreen" style="position:fixed;inset:0;background:linear-gradient(135deg,#0d0d12 0%,#16161f 100%);display:flex;align-items:center;justify-content:center;z-index:9999;backdrop-filter:blur(10px)">
-  <style>
-    .pwd-container{background:rgba(22,22,31,.95);border:1px solid rgba(243,240,232,.15);padding:60px 50px;border-radius:12px;width:90%;max-width:400px;box-shadow:0 25px 50px rgba(0,0,0,.5);text-align:center}
-    .pwd-title{font-family:'Fraunces',serif;font-size:32px;font-weight:900;color:#f3f0e8;margin-bottom:10px;letter-spacing:-.03em}
-    .pwd-subtitle{font-family:'Inter',sans-serif;font-size:14px;color:#9b9aa5;margin-bottom:30px;letter-spacing:.05em}
-    .pwd-input{width:100%;padding:12px 16px;background:rgba(243,240,232,.05);border:1px solid rgba(243,240,232,.2);border-radius:6px;color:#f3f0e8;font-family:'JetBrains Mono',monospace;font-size:16px;margin-bottom:16px;transition:all .2s;letter-spacing:.1em}
-    .pwd-input:focus{outline:0;border-color:#ff3b3b;background:rgba(243,240,232,.08);box-shadow:0 0 20px rgba(255,59,59,.2)}
-    .pwd-btn{width:100%;padding:12px 24px;background:#ff3b3b;color:#0d0d12;border:0;border-radius:6px;font-family:'JetBrains Mono',monospace;font-size:12px;font-weight:700;letter-spacing:.15em;text-transform:uppercase;cursor:pointer;transition:all .2s}
-    .pwd-btn:hover{background:#ff5555;transform:translateY(-2px)}
-    .pwd-btn:active{transform:translateY(0)}
-    .pwd-error{color:#ff3b3b;font-size:12px;margin-top:12px;font-family:'Inter',sans-serif;opacity:0;transition:opacity .3s}
-    .pwd-error.show{opacity:1}
-    .hidden-content{display:none}
-    .hidden-content.unlocked{display:block}
-  </style>
-  <div class="pwd-container">
-    <div class="pwd-title">Gameunication</div>
-    <div class="pwd-subtitle">Passwortgeschützt</div>
-    <input type="password" id="pwdInput" class="pwd-input" placeholder="Passwort eingeben…" autocomplete="off">
-    <button class="pwd-btn" id="pwdBtn">Zugang</button>
-    <div class="pwd-error" id="pwdError">Falsches Passwort</div>
-  </div>
-</div>
-
-<div id="mainContent" class="hidden-content">
+<div id="mainContent">
 
 <div class="mobile-hint hide" id="mobileHint">
   <span class="hint-icon">💻</span>
@@ -1526,16 +1501,7 @@ scrollBtn.addEventListener('click', () => window.scrollTo({top:0, behavior:'smoo
   }, {threshold: 0.25}).observe(sec);
 })();
 
-// ========== PASSWORD PROTECTION ==========
-const PASSWORD = 'dieterbaacke'; // ← PASSWORT HIER ÄNDERN
-
-const pwdInput = document.getElementById('pwdInput');
-const pwdBtn = document.getElementById('pwdBtn');
-const pwdError = document.getElementById('pwdError');
-const passwordScreen = document.getElementById('passwordScreen');
-const mainContent = document.getElementById('mainContent');
-
-// Mobile hint logic
+// ========== MOBILE HINT ==========
 function isMobile(){
   return /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
     || (window.innerWidth < 900 && ('ontouchstart' in window || navigator.maxTouchPoints > 1));
@@ -1550,36 +1516,7 @@ document.getElementById('mobileHintClose').addEventListener('click', () => {
   sessionStorage.setItem('hintDismissed','true');
 });
 
-// Check if already authenticated in session
-if (sessionStorage.getItem('authenticated') === 'true') {
-  passwordScreen.style.display = 'none';
-  mainContent.classList.add('unlocked');
-  showMobileHintIfNeeded();
-}
-
-// Handle password submission
-function checkPassword(){
-  if (pwdInput.value === PASSWORD) {
-    sessionStorage.setItem('authenticated', 'true');
-    passwordScreen.style.opacity = '0';
-    passwordScreen.style.pointerEvents = 'none';
-    mainContent.classList.add('unlocked');
-    setTimeout(() => { passwordScreen.style.display = 'none'; showMobileHintIfNeeded(); }, 300);
-  } else {
-    pwdError.classList.add('show');
-    pwdInput.style.borderColor = '#ff3b3b';
-    setTimeout(() => {
-      pwdError.classList.remove('show');
-      pwdInput.style.borderColor = '';
-    }, 2000);
-    pwdInput.value = '';
-  }
-}
-
-pwdBtn.addEventListener('click', checkPassword);
-pwdInput.addEventListener('keypress', (e) => {
-  if (e.key === 'Enter') checkPassword();
-});
+showMobileHintIfNeeded();
 
 </script>
 
